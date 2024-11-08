@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Forum</title>
+  <script src="https://cdn.jsdelivr.net/npm/skapi-js@latest/dist/skapi.js"></script>
+  <script>
+    const skapi =  new Skapi('service_id', 'owner_id');
+  </script>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <h1>Forum</h1>
+  <a href="login.html">Login</a>
+  <div id="new-post">
+    <form id="post-form" onsubmit="createPost(event); postButton.hidden = true">
+      <input name="post" placeholder="Write your post here..." required />
+      <br>
+      <input type="submit" id="postButton" value="Post">
+    </form>
+  </div>
+
+  <div id="main"></div>
+
+  
+<script>
+    let postDiv;
+    let commentDiv;
+  
+    // Fetch and display posts
+    skapi.getRecords({ table: 'posts' }).then(response => {
+        console.log(response)
+      displayPosts(response.list) 
+    });
+  
+    function createPost(event) {
+      event.preventDefault();
+      skapi.postRecord(event, { table: 'posts' }).then(response => {
+        console.log(response);
+        window.location.reload(); 
+      });
+    }
+  
+    async function displayPosts(listOfPosts) {
+      let mainDiv = document.getElementById("main");
+      mainDiv.innerHTML = ""; // Clear previous list
+  
+      for (let post of listOfPosts) {
+        let userResponse = await skapi.getUsers({ searchFor: 'user_id', value: post.user_id });
+        let username = userResponse.list[0].name;
+  
+        const postDiv = document.createElement("div");
+        postDiv.className = 'postDiv';
+        postDiv.innerHTML = /*html*/`
+          <p>${username}:</p>
+          <p>${post.data.post}</p>
+          <div class="comments">
+            <form onsubmit="event.preventDefault(); skapi.postRecord(event, { 
+                table: 'comments', 
+                reference: { record_id: '${post.record_id}' } 
+            }).then(response => {
+                console.log(response);
+                window.location.reload();
+            })">
+              <input name="comment" placeholder="Comment here..." required />
+              <br>
+              <input type="submit" value="Comment">
+            </form>
+          </div>
+        `;
+        mainDiv.prepend(postDiv);
+  
+        let commentsResponse = await skapi.getRecords({ table: 'comments', reference: post.record_id });
+        const comments = commentsResponse.list;
+        for (let comment of comments) {
+          let commentUserResponse = await skapi.getUsers({ searchFor: 'user_id', value: comment.user_id });
+          let commentUsername = commentUserResponse.list[0].name;
+  
+          const commentDiv = document.createElement("div");
+          commentDiv.className = 'commentDiv';
+          commentDiv.innerHTML = /*html*/`
+            <div class="comments">
+              <p>${commentUsername}:</p>
+              <p>${comment.data.comment}</p>
+              <form onsubmit="event.preventDefault(); skapi.postRecord(event, { 
+                  table: 'comments', 
+                  reference: { record_id: '${comment.record_id}' } 
+              }).then(response => {
+                  console.log(response);
+                  window.location.reload(); 
+              })">
+                <input name="comment" placeholder="Reply here..." required />
+                <br>
+                <input type="submit" value="Reply">
+              </form>
+            </div>
+          `;
+          postDiv.append(commentDiv);
+  
+          let repliesResponse = await skapi.getRecords({ table: 'comments', reference: comment.record_id });
+          const replies = repliesResponse.list; 
+          for (let reply of replies) {
+            let replyUserResponse = await skapi.getUsers({ searchFor: 'user_id', value: reply.user_id });
+            let replyUsername = replyUserResponse.list[0].name;
+  
+            const replyDiv = document.createElement("div");
+            replyDiv.className = 'commentOfCommentDiv';
+            replyDiv.innerHTML = /*html*/`
+              <div class="comments_of_comments">
+                <p>${replyUsername}:</p>
+                <p>${reply.data.comment}</p>
+              </div>
+            `;
+            commentDiv.append(replyDiv);
+          }
+        }
+      }
+    }
+  </script>
+</body>
+</html>
